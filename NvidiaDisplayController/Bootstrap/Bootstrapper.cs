@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -91,6 +92,15 @@ public class Bootstrapper : BootstrapperBase
             .InheritedFrom<IFactory>()
             .BindToFactory());
 
+        // write a small marker that startup has begun (helps when running the published EXE)
+        try
+        {
+            var baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? Environment.CurrentDirectory;
+            var logPath = Path.Combine(baseDir, "startup.log");
+            File.AppendAllText(logPath, $"OnStartup invoked: {DateTime.UtcNow:o}{Environment.NewLine}");
+        }
+        catch { /* best-effort logging only */ }
+
         CheckIfApplicationIsRunning()
             .IfSuccess(() => TryStartNvidia()
                 .IfSuccess(() => TryLoad()
@@ -161,9 +171,30 @@ public class Bootstrapper : BootstrapperBase
 
     private Result Log(Exception e, string message)
     {
+        // log to NLog
         _fileLogger.Error(e);
-        Execute.OnUIThread(() => MessageBox.Show(message));
-        Application.Shutdown();
+
+        // best-effort file logging next to the exe to help published builds
+        try
+        {
+            var baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? Environment.CurrentDirectory;
+            var logPath = Path.Combine(baseDir, "startup.log");
+            var text = $"{DateTime.UtcNow:o} - {message}{Environment.NewLine}{e}{Environment.NewLine}";
+            File.AppendAllText(logPath, text);
+        }
+        catch { }
+
+        try
+        {
+            Execute.OnUIThread(() => MessageBox.Show(message));
+        }
+        catch { }
+
+        try
+        {
+            Application.Shutdown();
+        }
+        catch { }
 
         return Result.Fail(message);
     }
