@@ -28,16 +28,33 @@ public class DisplayController
             if (profileSetting.Resolution != Size.Empty && profileSetting.Frequency > 0 &&
                 (profileSetting.Resolution != currentSetting.Resolution || profileSetting.Frequency != currentSetting.Frequency))
             {
-                var newSetting = new DisplaySetting(
-                    profileSetting.Resolution,
-                    currentSetting.Position,
-                    currentSetting.ColorDepth,
-                    profileSetting.Frequency,
-                    currentSetting.IsInterlaced,
-                    currentSetting.Orientation,
-                    currentSetting.OutputScalingMode);
+                var targetMode = display.DisplayScreen.GetPossibleSettings()
+                    .SingleOrDefault(mode => mode.Resolution == profileSetting.Resolution && mode.Frequency == profileSetting.Frequency);
 
-                display.DisplayScreen.SetSettings(newSetting, true);
+                if (targetMode != null)
+                {
+                    var newSetting = new DisplaySetting(targetMode,
+                        currentSetting.Position,
+                        currentSetting.Orientation,
+                        currentSetting.OutputScalingMode);
+
+                    display.DisplayScreen.SetSettings(newSetting, true);
+                }
+                else
+                {
+                    _logger.Warn($"Target display mode not found for resolution {profileSetting.Resolution} @ {profileSetting.Frequency}Hz. Falling back to manual setting.");
+
+                    var newSetting = new DisplaySetting(
+                        profileSetting.Resolution,
+                        currentSetting.Position,
+                        currentSetting.ColorDepth,
+                        profileSetting.Frequency,
+                        currentSetting.IsInterlaced,
+                        currentSetting.Orientation,
+                        currentSetting.OutputScalingMode);
+
+                    display.DisplayScreen.SetSettings(newSetting, true);
+                }
             }
 
             display.GammaRamp =
