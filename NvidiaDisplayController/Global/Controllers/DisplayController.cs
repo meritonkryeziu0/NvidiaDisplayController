@@ -31,32 +31,35 @@ public class DisplayController
             if (profileSetting.Resolution != Size.Empty && profileSetting.Frequency > 0 &&
                 (profileSetting.Resolution != currentSetting.Resolution || profileSetting.Frequency != currentSetting.Frequency))
             {
-                var targetMode = display.DisplayScreen.GetPossibleSettings()
+                var possibleModes = display.DisplayScreen.GetPossibleSettings().ToList();
+                var targetMode = possibleModes
                     .SingleOrDefault(mode => mode.Resolution == profileSetting.Resolution && mode.Frequency == profileSetting.Frequency);
 
                 if (targetMode != null)
                 {
-                    var newSetting = new DisplaySetting(targetMode,
-                        currentSetting.Position,
-                        currentSetting.Orientation,
-                        currentSetting.OutputScalingMode);
-
+                    _logger.Info($"Found exact target mode: {targetMode}");
+                    var newSetting = new DisplaySetting(targetMode, currentSetting.Position);
                     display.DisplayScreen.SetSettings(newSetting, true);
                 }
                 else
                 {
-                    _logger.Warn($"Target display mode not found for resolution {profileSetting.Resolution} @ {profileSetting.Frequency}Hz. Falling back to manual setting.");
+                    _logger.Warn($"Target display mode not found for resolution {profileSetting.Resolution} @ {profileSetting.Frequency}Hz.");
+                    _logger.Warn($"Available modes: {string.Join(", ", possibleModes)}");
 
-                    var newSetting = new DisplaySetting(
-                        profileSetting.Resolution,
-                        currentSetting.Position,
-                        currentSetting.ColorDepth,
-                        profileSetting.Frequency,
-                        currentSetting.IsInterlaced,
-                        currentSetting.Orientation,
-                        currentSetting.OutputScalingMode);
+                    var fallbackMode = possibleModes
+                        .FirstOrDefault(mode => mode.Resolution == profileSetting.Resolution)
+                        ?? possibleModes.FirstOrDefault();
 
-                    display.DisplayScreen.SetSettings(newSetting, true);
+                    if (fallbackMode != null)
+                    {
+                        _logger.Warn($"Falling back to nearest available mode: {fallbackMode}");
+                        var newSetting = new DisplaySetting(fallbackMode, currentSetting.Position);
+                        display.DisplayScreen.SetSettings(newSetting, true);
+                    }
+                    else
+                    {
+                        _logger.Warn("No available modes found; skipping resolution change.");
+                    }
                 }
             }
 
