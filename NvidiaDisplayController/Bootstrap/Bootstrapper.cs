@@ -92,23 +92,47 @@ public class Bootstrapper : BootstrapperBase
             .InheritedFrom<IFactory>()
             .BindToFactory());
 
-        // write a small marker that startup has begun (helps when running the published EXE)
+        AppendStartupLog("OnStartup invoked");
+
+        var check = CheckIfApplicationIsRunning();
+        AppendStartupLog($"CheckIfApplicationIsRunning: {check.IsSuccess}");
+        if (!check.IsSuccess)
+        {
+            return;
+        }
+
+        AppendStartupLog("Before TryStartNvidia");
+        var nvidia = TryStartNvidia();
+        AppendStartupLog($"TryStartNvidia: {nvidia.IsSuccess}");
+        if (!nvidia.IsSuccess) return;
+
+        AppendStartupLog("Before TryLoad");
+        var load = TryLoad();
+        AppendStartupLog($"TryLoad: {load.IsSuccess}");
+        if (!load.IsSuccess) return;
+
+        AppendStartupLog("Before DisplayRootViewForAsync");
+        try
+        {
+            DisplayRootViewForAsync<ShellViewModel>();
+            AppendStartupLog("Called DisplayRootViewForAsync");
+            _fileLogger.Info("Loaded root.");
+        }
+        catch (Exception ex)
+        {
+            Log(ex, "Failed to display root view.");
+        }
+    }
+
+    private void AppendStartupLog(string message)
+    {
         try
         {
             var baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? Environment.CurrentDirectory;
             var logPath = Path.Combine(baseDir, "startup.log");
-            File.AppendAllText(logPath, $"OnStartup invoked: {DateTime.UtcNow:o}{Environment.NewLine}");
+            File.AppendAllText(logPath, $"{DateTime.UtcNow:o} - {message}{Environment.NewLine}");
         }
-        catch { /* best-effort logging only */ }
-
-        CheckIfApplicationIsRunning()
-            .IfSuccess(() => TryStartNvidia()
-                .IfSuccess(() => TryLoad()
-                    .IfSuccess(() =>
-                    {
-                        DisplayRootViewForAsync<ShellViewModel>();
-                        _fileLogger.Info("Loaded root.");
-                    })));
+        catch { }
     }
 
     private Result CheckIfApplicationIsRunning()
