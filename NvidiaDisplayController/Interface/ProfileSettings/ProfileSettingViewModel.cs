@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Drawing;
 using System.Windows.Input;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,6 +8,7 @@ using System.Threading.Tasks;
 using Caliburn.Micro;
 using NvidiaDisplayController.Objects.Entities;
 using NvidiaDisplayController.Objects.HandleEvents;
+using WindowsDisplayAPI;
 
 namespace NvidiaDisplayController.Interface.ProfileSettings;
 
@@ -20,6 +22,8 @@ public class ProfileSettingViewModel : Screen, IHandle<RevertEvent>
     private bool _isAltChecked;
     private bool _isShiftChecked;
     private Key? _selectedKey;
+    private DisplayPossibleSetting? _selectedDisplayMode;
+    private List<DisplayPossibleSetting> _availableDisplayModes = new();
 
     public ProfileSettingViewModel(ProfileSetting profileSetting, bool isDefault, IEventAggregator eventAggregator, Profile profile)
     {
@@ -28,15 +32,47 @@ public class ProfileSettingViewModel : Screen, IHandle<RevertEvent>
         ProfileSetting = profileSetting;
         IsDefault = isDefault;
 
+        _resetting = true;
         SetOriginalSettings(profileSetting);
         LoadHotkeySettings();
+        BuildAvailableDisplayModes();
+        _resetting = false;
+
         _eventAggregator.SubscribeOnPublishedThread(this);
     }
 
     public ProfileSetting ProfileSetting { get; }
 
     public bool IsDefault { get; }
-    
+
+    public IList<DisplayPossibleSetting> AvailableDisplayModes
+    {
+        get => _availableDisplayModes;
+        private set
+        {
+            if (Equals(value, _availableDisplayModes)) return;
+            _availableDisplayModes = value.ToList();
+            NotifyOfPropertyChange();
+        }
+    }
+
+    public DisplayPossibleSetting? SelectedDisplayMode
+    {
+        get => _selectedDisplayMode;
+        set
+        {
+            if (Equals(value, _selectedDisplayMode)) return;
+            _selectedDisplayMode = value;
+            if (value != null)
+            {
+                ProfileSetting.Resolution = value.Resolution;
+                ProfileSetting.Frequency = value.Frequency;
+            }
+            NotifyOfPropertyChange();
+            Publish();
+        }
+    }
+
     public List<Key> AvailableKeys { get; } = new()
     {
         Key.F1, Key.F2, Key.F3, Key.F4, Key.F5, Key.F6, Key.F7, Key.F8, Key.F9, Key.F10, Key.F11, Key.F12,
@@ -150,6 +186,14 @@ public class ProfileSettingViewModel : Screen, IHandle<RevertEvent>
             Brightness = _originalSettings.Brightness;
             Contrast = _originalSettings.Contrast;
             Gamma = _originalSettings.Gamma;
+            DigitalVibrance = _originalSettings.DigitalVibrance;
+
+            if (AvailableDisplayModes.Count > 0)
+            {
+                SelectedDisplayMode = AvailableDisplayModes.FirstOrDefault(mode =>
+                    mode.Resolution == _originalSettings.Resolution && mode.Frequency == _originalSettings.Frequency)
+                    ?? AvailableDisplayModes.FirstOrDefault();
+            }
         }
         _resetting = false;
 
@@ -172,6 +216,21 @@ public class ProfileSettingViewModel : Screen, IHandle<RevertEvent>
         NotifyOfPropertyChange(nameof(IsAltChecked));
         NotifyOfPropertyChange(nameof(IsShiftChecked));
         NotifyOfPropertyChange(nameof(SelectedKey));
+    }
+
+    private void BuildAvailableDisplayModes()
+    {
+        var display = Display.GetDisplays().SingleOrDefault(d => d.DevicePath == _profile.Monitor.DisplayDevicePath);
+        var modes = display?.DisplayScreen.GetPossibleSettings().ToList() ?? new List<DisplayPossibleSetting>();
+
+        AvailableDisplayModes = modes;
+
+        if (modes.Count == 0)
+            return;
+
+        SelectedDisplayMode = modes.FirstOrDefault(mode =>
+                mode.Resolution == ProfileSetting.Resolution && mode.Frequency == ProfileSetting.Frequency)
+            ?? modes.FirstOrDefault();
     }
 
     private void UpdateHotkey()
@@ -215,7 +274,8 @@ public class ProfileSettingViewModel : Screen, IHandle<RevertEvent>
     private void SetOriginalSettings(ProfileSetting profileSetting)
     {
         _originalSettings = new ProfileSetting(profileSetting.Brightness, profileSetting.Contrast,
-            profileSetting.Gamma, profileSetting.DigitalVibrance);
+            profileSetting.Gamma, profileSetting.DigitalVibrance, profileSetting.Resolution,
+            profileSetting.Frequency);
     }
 
     private void Publish(bool value = true)
