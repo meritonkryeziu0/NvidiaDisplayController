@@ -222,6 +222,8 @@ public class ProfileSettingViewModel : Screen, IHandle<RevertEvent>
     {
         try
         {
+            AppendStartupLog("BuildAvailableDisplayModes: start");
+
             if (_profile?.Monitor == null)
             {
                 AppendStartupLog("BuildAvailableDisplayModes: profile or monitor null");
@@ -229,8 +231,30 @@ public class ProfileSettingViewModel : Screen, IHandle<RevertEvent>
                 return;
             }
 
-            var display = Display.GetDisplays().SingleOrDefault(d => d != null && d.DevicePath == _profile.Monitor.DisplayDevicePath);
-            var modes = display?.DisplayScreen?.GetPossibleSettings()?.ToList() ?? new List<DisplayPossibleSetting>();
+            var displays = Display.GetDisplays()?.ToList() ?? new List<Display>();
+            AppendStartupLog($"BuildAvailableDisplayModes: found {displays.Count} displays");
+
+            Display? matching = null;
+            foreach (var d in displays)
+            {
+                try
+                {
+                    if (d == null) continue;
+                    if (d.DevicePath == null) continue;
+                    if (d.DevicePath == _profile.Monitor.DisplayDevicePath)
+                    {
+                        matching = d;
+                        break;
+                    }
+                }
+                catch (Exception inner)
+                {
+                    AppendStartupLog($"BuildAvailableDisplayModes: skipping display due to exception: {inner}");
+                }
+            }
+
+            var modes = matching?.DisplayScreen?.GetPossibleSettings()?.ToList() ?? new List<DisplayPossibleSetting>();
+            AppendStartupLog($"BuildAvailableDisplayModes: modes count {modes.Count}");
 
             AvailableDisplayModes = modes;
 
@@ -240,6 +264,7 @@ public class ProfileSettingViewModel : Screen, IHandle<RevertEvent>
             SelectedDisplayMode = modes.FirstOrDefault(mode =>
                     mode.Resolution == ProfileSetting.Resolution && mode.Frequency == ProfileSetting.Frequency)
                 ?? modes.FirstOrDefault();
+            AppendStartupLog("BuildAvailableDisplayModes: selected display mode set");
         }
         catch (Exception ex)
         {
