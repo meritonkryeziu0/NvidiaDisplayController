@@ -111,16 +111,16 @@ public class Bootstrapper : BootstrapperBase
         AppendStartupLog($"TryLoad: {load.IsSuccess}");
         if (!load.IsSuccess) return;
 
-        AppendStartupLog("Before DisplayRootViewForAsync");
+        AppendStartupLog("Before DisplayRootViewFor (sync)");
         try
         {
-            DisplayRootViewForAsync<ShellViewModel>();
-            AppendStartupLog("Called DisplayRootViewForAsync");
+            DisplayRootViewFor<ShellViewModel>();
+            AppendStartupLog("Called DisplayRootViewFor (sync)");
             _fileLogger.Info("Loaded root.");
         }
         catch (Exception ex)
         {
-            Log(ex, "Failed to display root view.");
+            Log(ex, "Failed to display root view (sync).");
         }
     }
 
