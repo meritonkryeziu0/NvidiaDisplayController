@@ -220,17 +220,32 @@ public class ProfileSettingViewModel : Screen, IHandle<RevertEvent>
 
     private void BuildAvailableDisplayModes()
     {
-        var display = Display.GetDisplays().SingleOrDefault(d => d.DevicePath == _profile.Monitor.DisplayDevicePath);
-        var modes = display?.DisplayScreen.GetPossibleSettings().ToList() ?? new List<DisplayPossibleSetting>();
+        try
+        {
+            if (_profile?.Monitor == null)
+            {
+                AppendStartupLog("BuildAvailableDisplayModes: profile or monitor null");
+                AvailableDisplayModes = new List<DisplayPossibleSetting>();
+                return;
+            }
 
-        AvailableDisplayModes = modes;
+            var display = Display.GetDisplays().SingleOrDefault(d => d != null && d.DevicePath == _profile.Monitor.DisplayDevicePath);
+            var modes = display?.DisplayScreen?.GetPossibleSettings()?.ToList() ?? new List<DisplayPossibleSetting>();
 
-        if (modes.Count == 0)
-            return;
+            AvailableDisplayModes = modes;
 
-        SelectedDisplayMode = modes.FirstOrDefault(mode =>
-                mode.Resolution == ProfileSetting.Resolution && mode.Frequency == ProfileSetting.Frequency)
-            ?? modes.FirstOrDefault();
+            if (modes.Count == 0)
+                return;
+
+            SelectedDisplayMode = modes.FirstOrDefault(mode =>
+                    mode.Resolution == ProfileSetting.Resolution && mode.Frequency == ProfileSetting.Frequency)
+                ?? modes.FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            AppendStartupLog($"BuildAvailableDisplayModes exception: {ex}");
+            AvailableDisplayModes = new List<DisplayPossibleSetting>();
+        }
     }
 
     private void UpdateHotkey()
