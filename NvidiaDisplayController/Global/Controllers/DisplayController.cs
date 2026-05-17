@@ -32,8 +32,15 @@ public class DisplayController
                 (profileSetting.Resolution != currentSetting.Resolution || profileSetting.Frequency != currentSetting.Frequency))
             {
                 var possibleModes = display.DisplayScreen.GetPossibleSettings().ToList();
-                var targetMode = possibleModes
-                    .SingleOrDefault(mode => mode.Resolution == profileSetting.Resolution && mode.Frequency == profileSetting.Frequency);
+                var matchingModes = possibleModes
+                    .Where(mode => mode.Resolution == profileSetting.Resolution && mode.Frequency == profileSetting.Frequency)
+                    .ToList();
+                var targetMode = matchingModes.FirstOrDefault();
+
+                if (matchingModes.Count > 1)
+                {
+                    _logger.Warn($"Multiple matching modes found for resolution {profileSetting.Resolution} @ {profileSetting.Frequency}Hz. Using first match.");
+                }
 
                 if (targetMode != null)
                 {
