@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Drawing;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using NLog;
 using NvidiaDisplayController.Objects;
 using NvidiaDisplayController.Objects.Entities;
@@ -65,12 +67,27 @@ public class DisplayController
         }
         catch (Exception e)
         {
-            var message = "Failed to update display and color settings.";
+            var message = $"Failed to update display and color settings.\n\n" +
+                          $"Target resolution: {profileSetting.Resolution.Width}x{profileSetting.Resolution.Height} @ {profileSetting.Frequency}Hz\n" +
+                          $"Brightness: {profileSetting.Brightness}, Contrast: {profileSetting.Contrast}, Gamma: {profileSetting.Gamma}, DigitalVibrance: {profileSetting.DigitalVibrance}\n\n" +
+                          $"Exception: {e.Message}\n\n{e}\n";
 
             _logger.Error(message);
             _logger.Error(e);
+            AppendStartupLog(message);
 
             _windowManager.ShowMessageBox(message);
         }
+
+    private void AppendStartupLog(string message)
+    {
+        try
+        {
+            var baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? Environment.CurrentDirectory;
+            var logPath = Path.Combine(baseDir, "startup.log");
+            File.AppendAllText(logPath, $"{DateTime.UtcNow:o} - {message}{Environment.NewLine}");
+        }
+        catch { }
+    }
     }
 }
