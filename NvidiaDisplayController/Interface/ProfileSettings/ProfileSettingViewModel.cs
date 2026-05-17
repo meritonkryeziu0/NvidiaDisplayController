@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Drawing;
 using System.Windows.Input;
+using System.IO;
+using System.Reflection;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -327,6 +329,17 @@ public class ProfileSettingViewModel : Screen, IHandle<RevertEvent>
     public void IsUpdated()
     {
         SetOriginalSettings(ProfileSetting);
+    }
+
+    private void AppendStartupLog(string message)
+    {
+        try
+        {
+            var baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? Environment.CurrentDirectory;
+            var logPath = Path.Combine(baseDir, "startup.log");
+            File.AppendAllText(logPath, $"{DateTime.UtcNow:o} - {message}{Environment.NewLine}");
+        }
+        catch { }
     }
 }
 
