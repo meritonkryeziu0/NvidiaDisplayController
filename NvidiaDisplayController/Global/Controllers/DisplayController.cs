@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Drawing;
+using System.Linq;
 using NLog;
 using NvidiaDisplayController.Objects;
 using NvidiaDisplayController.Objects.Entities;
