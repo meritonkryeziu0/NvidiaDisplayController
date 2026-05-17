@@ -78,6 +78,7 @@ public class DisplayController
 
             _windowManager.ShowMessageBox(message);
         }
+    }
 
     private void AppendStartupLog(string message)
     {
@@ -88,6 +89,5 @@ public class DisplayController
             File.AppendAllText(logPath, $"{DateTime.UtcNow:o} - {message}{Environment.NewLine}");
         }
         catch { }
-    }
     }
 }
