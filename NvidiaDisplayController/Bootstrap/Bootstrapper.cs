@@ -266,6 +266,16 @@ public class Bootstrapper : BootstrapperBase
 
     protected override void OnUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        _fileLogger.Error(e);
+        try
+        {
+            var baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? Environment.CurrentDirectory;
+            var logPath = Path.Combine(baseDir, "startup.log");
+            var text = $"{DateTime.UtcNow:o} - DispatcherUnhandledException: {e.Exception}{Environment.NewLine}";
+            File.AppendAllText(logPath, text);
+        }
+        catch { }
+
+        _fileLogger.Error(e.Exception);
+        e.Handled = true;
     }
 }
