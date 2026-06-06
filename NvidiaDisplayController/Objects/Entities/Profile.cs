@@ -1,9 +1,14 @@
 ﻿using System.Windows.Input;
+using Newtonsoft.Json;
 
 namespace NvidiaDisplayController.Objects.Entities;
 
 public class Profile
 {
+    public Profile()
+    {
+    }
+
     public Profile(Monitor monitor, string name, ProfileSetting profileSetting, bool isActive,
         bool isDefault = false)
     {
@@ -14,9 +19,10 @@ public class Profile
         IsDefault = isDefault;
     }
 
-    public Monitor Monitor { get; }
-    public string Name { get; set; }
-    public ProfileSetting ProfileSetting { get; }
+    [JsonIgnore]
+    public Monitor Monitor { get; set; } = null!;
+    public string Name { get; set; } = string.Empty;
+    public ProfileSetting ProfileSetting { get; set; } = new();
     public bool IsActive { get; set; }
     public bool IsDefault { get; set; }
     

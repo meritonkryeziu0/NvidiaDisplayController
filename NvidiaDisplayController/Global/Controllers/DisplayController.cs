@@ -1,4 +1,8 @@
 ﻿using System;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Reflection;
 using NLog;
 using NvidiaDisplayController.Objects;
 using NvidiaDisplayController.Objects.Entities;
@@ -22,6 +26,53 @@ public class DisplayController
     {
         try
         {
+            var currentSetting = display.DisplayScreen.CurrentSetting;
+
+            if (profileSetting.Resolution != Size.Empty && profileSetting.Frequency > 0 &&
+                (profileSetting.Resolution != currentSetting.Resolution || profileSetting.Frequency != currentSetting.Frequency))
+            {
+                var possibleModes = display.DisplayScreen.GetPossibleSettings().ToList();
+                var matchingModes = possibleModes
+                    .Where(mode => mode.Resolution == profileSetting.Resolution &&
+                                   mode.Frequency == profileSetting.Frequency &&
+                                   mode.ColorDepth == profileSetting.ColorDepth &&
+                                   mode.IsInterlaced == profileSetting.IsInterlaced)
+                    .ToList();
+                var targetMode = matchingModes.FirstOrDefault();
+
+                if (matchingModes.Count > 1)
+                {
+                    _logger.Warn($"Multiple matching modes found for resolution {profileSetting.Resolution} @ {profileSetting.Frequency}Hz. Using first match.");
+                }
+
+                if (targetMode != null)
+                {
+                    _logger.Info($"Found exact target mode: {targetMode}");
+                    var newSetting = new DisplaySetting(targetMode, currentSetting.Position);
+                    display.DisplayScreen.SetSettings(newSetting, true);
+                }
+                else
+                {
+                    _logger.Warn($"Target display mode not found for resolution {profileSetting.Resolution} @ {profileSetting.Frequency}Hz.");
+                    _logger.Warn($"Available modes: {string.Join(", ", possibleModes)}");
+
+                    var fallbackMode = possibleModes
+                        .FirstOrDefault(mode => mode.Resolution == profileSetting.Resolution && mode.Frequency == profileSetting.Frequency)
+                        ?? possibleModes.FirstOrDefault();
+
+                    if (fallbackMode != null)
+                    {
+                        _logger.Warn($"Falling back to nearest available mode: {fallbackMode}");
+                        var newSetting = new DisplaySetting(fallbackMode, currentSetting.Position);
+                        display.DisplayScreen.SetSettings(newSetting, true);
+                    }
+                    else
+                    {
+                        _logger.Warn("No available modes found; skipping resolution change.");
+                    }
+                }
+            }
+
             display.GammaRamp =
                 new DisplayGammaRamp(profileSetting.Brightness, profileSetting.Contrast, profileSetting.Gamma);
             if (nvidiaMonitor is not null)
@@ -29,12 +80,27 @@ public class DisplayController
         }
         catch (Exception e)
         {
-            var message = "Failed to update color settings.";
+            var message = $"Failed to update display and color settings.\n\n" +
+                          $"Target resolution: {profileSetting.Resolution.Width}x{profileSetting.Resolution.Height} @ {profileSetting.Frequency}Hz\n" +
+                          $"Brightness: {profileSetting.Brightness}, Contrast: {profileSetting.Contrast}, Gamma: {profileSetting.Gamma}, DigitalVibrance: {profileSetting.DigitalVibrance}\n\n" +
+                          $"Exception: {e.Message}\n\n{e}\n";
 
             _logger.Error(message);
             _logger.Error(e);
+            AppendStartupLog(message);
 
             _windowManager.ShowMessageBox(message);
         }
+    }
+
+    private void AppendStartupLog(string message)
+    {
+        try
+        {
+            var baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? Environment.CurrentDirectory;
+            var logPath = Path.Combine(baseDir, "startup.log");
+            File.AppendAllText(logPath, $"{DateTime.UtcNow:o} - {message}{Environment.NewLine}");
+        }
+        catch { }
     }
 }

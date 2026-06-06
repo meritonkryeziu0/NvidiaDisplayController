@@ -21,8 +21,27 @@ public partial class ShellView
 
     public ShellView()
     {
-        InitializeComponent();
-        Start();
+        try
+        {
+            InitializeComponent();
+            AppendStartupLog("ShellView constructor: InitializeComponent succeeded");
+        }
+        catch (Exception ex)
+        {
+            AppendStartupLog($"ShellView constructor: InitializeComponent failed - {ex}");
+            throw;
+        }
+
+        try
+        {
+            Start();
+            AppendStartupLog("ShellView constructor: Start succeeded");
+        }
+        catch (Exception ex)
+        {
+            AppendStartupLog($"ShellView constructor: Start failed - {ex}");
+            throw;
+        }
     }
 
     [Inject] public DataController DataController { get; set; } = null!;
@@ -63,9 +82,20 @@ public partial class ShellView
 
     private void CreateSystemTrayIcon()
     {
-        _notifyIcon = new NotifyIcon();
-        _notifyIcon.Icon = new Icon("Resources/desktop.ico");
-        _notifyIcon.Visible = true;
+        try
+        {
+            _notifyIcon = new NotifyIcon();
+            _notifyIcon.Icon = new Icon("Resources/desktop.ico");
+            _notifyIcon.Visible = true;
+            AppendStartupLog("CreateSystemTrayIcon: created notify icon");
+        }
+        catch (Exception ex)
+        {
+            AppendStartupLog($"CreateSystemTrayIcon failed: {ex}");
+            // continue without tray icon
+            _notifyIcon = null;
+            return;
+        }
 
         // show the window when left clicking the tray icon
         _notifyIcon.MouseClick += (s, e) => { 
@@ -78,6 +108,17 @@ public partial class ShellView
         _notifyIcon.ContextMenuStrip.Items.Add("Exit", null, ExitEvent);
 
         BuildToolTip();
+    }
+
+    private void AppendStartupLog(string message)
+    {
+        try
+        {
+            var baseDir = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? Environment.CurrentDirectory;
+            var logPath = System.IO.Path.Combine(baseDir, "startup.log");
+            System.IO.File.AppendAllText(logPath, $"{DateTime.UtcNow:o} - {message}{Environment.NewLine}");
+        }
+        catch { }
     }
 
     private void BuildToolTip()

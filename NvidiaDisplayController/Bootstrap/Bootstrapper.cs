@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -91,14 +92,48 @@ public class Bootstrapper : BootstrapperBase
             .InheritedFrom<IFactory>()
             .BindToFactory());
 
-        CheckIfApplicationIsRunning()
-            .IfSuccess(() => TryStartNvidia()
-                .IfSuccess(() => TryLoad()
-                    .IfSuccess(() =>
-                    {
-                        DisplayRootViewForAsync<ShellViewModel>();
-                        _fileLogger.Info("Loaded root.");
-                    })));
+        AppendStartupLog("OnStartup invoked");
+
+        var check = CheckIfApplicationIsRunning();
+        AppendStartupLog($"CheckIfApplicationIsRunning: {check.IsSuccess}");
+        if (!check.IsSuccess)
+        {
+            return;
+        }
+
+        AppendStartupLog("Before TryStartNvidia");
+        var nvidia = TryStartNvidia();
+        AppendStartupLog($"TryStartNvidia: {nvidia.IsSuccess}");
+        if (!nvidia.IsSuccess) return;
+
+        AppendStartupLog("Before TryLoad");
+        var load = TryLoad();
+        AppendStartupLog($"TryLoad: {load.IsSuccess}");
+        if (!load.IsSuccess) return;
+
+        AppendStartupLog("Before DisplayRootViewFor (sync)");
+        try
+        {
+            // call the async root view method synchronously so exceptions propagate here
+            DisplayRootViewForAsync<ShellViewModel>().GetAwaiter().GetResult();
+            AppendStartupLog("Called DisplayRootViewForAsync (sync wait)");
+            _fileLogger.Info("Loaded root.");
+        }
+        catch (Exception ex)
+        {
+            Log(ex, "Failed to display root view (sync wait).");
+        }
+    }
+
+    private void AppendStartupLog(string message)
+    {
+        try
+        {
+            var baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? Environment.CurrentDirectory;
+            var logPath = Path.Combine(baseDir, "startup.log");
+            File.AppendAllText(logPath, $"{DateTime.UtcNow:o} - {message}{Environment.NewLine}");
+        }
+        catch { }
     }
 
     private Result CheckIfApplicationIsRunning()
@@ -161,9 +196,30 @@ public class Bootstrapper : BootstrapperBase
 
     private Result Log(Exception e, string message)
     {
+        // log to NLog
         _fileLogger.Error(e);
-        Execute.OnUIThread(() => MessageBox.Show(message));
-        Application.Shutdown();
+
+        // best-effort file logging next to the exe to help published builds
+        try
+        {
+            var baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? Environment.CurrentDirectory;
+            var logPath = Path.Combine(baseDir, "startup.log");
+            var text = $"{DateTime.UtcNow:o} - {message}{Environment.NewLine}{e}{Environment.NewLine}";
+            File.AppendAllText(logPath, text);
+        }
+        catch { }
+
+        try
+        {
+            Execute.OnUIThread(() => MessageBox.Show(message));
+        }
+        catch { }
+
+        try
+        {
+            Application.Shutdown();
+        }
+        catch { }
 
         return Result.Fail(message);
     }
@@ -211,6 +267,16 @@ public class Bootstrapper : BootstrapperBase
 
     protected override void OnUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        _fileLogger.Error(e);
+        try
+        {
+            var baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? Environment.CurrentDirectory;
+            var logPath = Path.Combine(baseDir, "startup.log");
+            var text = $"{DateTime.UtcNow:o} - DispatcherUnhandledException: {e.Exception}{Environment.NewLine}";
+            File.AppendAllText(logPath, text);
+        }
+        catch { }
+
+        _fileLogger.Error(e.Exception);
+        e.Handled = true;
     }
 }

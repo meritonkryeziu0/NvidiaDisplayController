@@ -1,10 +1,12 @@
 using System.Collections.Generic;
 using System.Drawing;
+using Newtonsoft.Json;
 
 namespace NvidiaDisplayController.Objects.Entities;
 
 public class Monitor
 {
+    [JsonConstructor]
     public Monitor(string displayDevicePath, string name, Size resolution, int frequency)
     {
         DisplayDevicePath = displayDevicePath;

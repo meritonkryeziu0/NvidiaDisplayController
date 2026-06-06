@@ -1,4 +1,6 @@
 ﻿using System;
+using System.IO;
+using System.Reflection;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -70,6 +72,8 @@ public class ShellViewModel : Conductor<IScreen>, IHandle<ProfileSettingsEvent>
         _registryController = registryController;
 
         _eventAggregator.SubscribeOnPublishedThread(this);
+
+        AppendStartupLog("ShellViewModel constructed");
 
         Start();
     }
@@ -400,6 +404,18 @@ public class ShellViewModel : Conductor<IScreen>, IHandle<ProfileSettingsEvent>
     {
         base.OnViewLoaded(view);
         InitializeHotkeyManager(view);
+        AppendStartupLog("ShellView OnViewLoaded");
+    }
+
+    private void AppendStartupLog(string message)
+    {
+        try
+        {
+            var baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? Environment.CurrentDirectory;
+            var logPath = Path.Combine(baseDir, "startup.log");
+            File.AppendAllText(logPath, $"{DateTime.UtcNow:o} - {message}{Environment.NewLine}");
+        }
+        catch { }
     }
 
     private void InitializeHotkeyManager(object view)

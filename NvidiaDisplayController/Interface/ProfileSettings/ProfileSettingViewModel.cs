@@ -1,5 +1,8 @@
 ﻿using System;
+using System.Drawing;
 using System.Windows.Input;
+using System.IO;
+using System.Reflection;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -7,6 +10,7 @@ using System.Threading.Tasks;
 using Caliburn.Micro;
 using NvidiaDisplayController.Objects.Entities;
 using NvidiaDisplayController.Objects.HandleEvents;
+using WindowsDisplayAPI;
 
 namespace NvidiaDisplayController.Interface.ProfileSettings;
 
@@ -20,6 +24,8 @@ public class ProfileSettingViewModel : Screen, IHandle<RevertEvent>
     private bool _isAltChecked;
     private bool _isShiftChecked;
     private Key? _selectedKey;
+    private DisplayPossibleSetting? _selectedDisplayMode;
+    private List<DisplayPossibleSetting> _availableDisplayModes = new();
 
     public ProfileSettingViewModel(ProfileSetting profileSetting, bool isDefault, IEventAggregator eventAggregator, Profile profile)
     {
@@ -28,15 +34,49 @@ public class ProfileSettingViewModel : Screen, IHandle<RevertEvent>
         ProfileSetting = profileSetting;
         IsDefault = isDefault;
 
+        _resetting = true;
         SetOriginalSettings(profileSetting);
         LoadHotkeySettings();
+        BuildAvailableDisplayModes();
+        _resetting = false;
+
         _eventAggregator.SubscribeOnPublishedThread(this);
     }
 
     public ProfileSetting ProfileSetting { get; }
 
     public bool IsDefault { get; }
-    
+
+    public IList<DisplayPossibleSetting> AvailableDisplayModes
+    {
+        get => _availableDisplayModes;
+        private set
+        {
+            if (Equals(value, _availableDisplayModes)) return;
+            _availableDisplayModes = value.ToList();
+            NotifyOfPropertyChange();
+        }
+    }
+
+    public DisplayPossibleSetting? SelectedDisplayMode
+    {
+        get => _selectedDisplayMode;
+        set
+        {
+            if (Equals(value, _selectedDisplayMode)) return;
+            _selectedDisplayMode = value;
+            if (value != null)
+            {
+                ProfileSetting.Resolution = value.Resolution;
+                ProfileSetting.Frequency = value.Frequency;
+                ProfileSetting.ColorDepth = value.ColorDepth;
+                ProfileSetting.IsInterlaced = value.IsInterlaced;
+            }
+            NotifyOfPropertyChange();
+            Publish();
+        }
+    }
+
     public List<Key> AvailableKeys { get; } = new()
     {
         Key.F1, Key.F2, Key.F3, Key.F4, Key.F5, Key.F6, Key.F7, Key.F8, Key.F9, Key.F10, Key.F11, Key.F12,
@@ -150,6 +190,14 @@ public class ProfileSettingViewModel : Screen, IHandle<RevertEvent>
             Brightness = _originalSettings.Brightness;
             Contrast = _originalSettings.Contrast;
             Gamma = _originalSettings.Gamma;
+            DigitalVibrance = _originalSettings.DigitalVibrance;
+
+            if (AvailableDisplayModes.Count > 0)
+            {
+                SelectedDisplayMode = AvailableDisplayModes.FirstOrDefault(mode =>
+                    mode.Resolution == _originalSettings.Resolution && mode.Frequency == _originalSettings.Frequency)
+                    ?? AvailableDisplayModes.FirstOrDefault();
+            }
         }
         _resetting = false;
 
@@ -172,6 +220,85 @@ public class ProfileSettingViewModel : Screen, IHandle<RevertEvent>
         NotifyOfPropertyChange(nameof(IsAltChecked));
         NotifyOfPropertyChange(nameof(IsShiftChecked));
         NotifyOfPropertyChange(nameof(SelectedKey));
+    }
+
+    private void BuildAvailableDisplayModes()
+    {
+        try
+        {
+            AppendStartupLog("BuildAvailableDisplayModes: start");
+
+            if (_profile?.Monitor == null)
+            {
+                AppendStartupLog("BuildAvailableDisplayModes: profile or monitor null");
+                AvailableDisplayModes = new List<DisplayPossibleSetting>();
+                return;
+            }
+
+            var displays = Display.GetDisplays()?.ToList() ?? new List<Display>();
+            AppendStartupLog($"BuildAvailableDisplayModes: found {displays.Count} displays");
+
+            Display? matching = null;
+            foreach (var d in displays)
+            {
+                try
+                {
+                    if (d == null) continue;
+                    if (d.DevicePath == null) continue;
+                    if (d.DevicePath == _profile.Monitor.DisplayDevicePath)
+                    {
+                        matching = d;
+                        break;
+                    }
+                }
+                catch (Exception inner)
+                {
+                    AppendStartupLog($"BuildAvailableDisplayModes: skipping display due to exception: {inner}");
+                }
+            }
+
+            if (matching == null && !string.IsNullOrEmpty(_profile.Monitor.Name))
+            {
+                matching = displays.FirstOrDefault(d =>
+                    d.DisplayName?.Contains(_profile.Monitor.Name) == true ||
+                    d.ScreenName?.Contains(_profile.Monitor.Name) == true);
+                AppendStartupLog(matching == null
+                    ? "BuildAvailableDisplayModes: no name-based display match found"
+                    : $"BuildAvailableDisplayModes: display matched by name {_profile.Monitor.Name}");
+            }
+
+            if (matching == null && displays.Count == 1)
+            {
+                matching = displays.First();
+                AppendStartupLog("BuildAvailableDisplayModes: fallback to single available display");
+            }
+
+            var modes = matching?.DisplayScreen?.GetPossibleSettings()?.ToList() ?? new List<DisplayPossibleSetting>();
+            AppendStartupLog($"BuildAvailableDisplayModes: modes count {modes.Count}");
+
+            if (modes.Count == 0 && matching == null && displays.Count == 1)
+            {
+                matching = displays.First();
+                modes = matching.DisplayScreen?.GetPossibleSettings()?.ToList() ?? new List<DisplayPossibleSetting>();
+                AppendStartupLog($"BuildAvailableDisplayModes: fallback single display modes count {modes.Count}");
+            }
+
+            AvailableDisplayModes = modes;
+
+            if (modes.Count == 0)
+                return;
+
+            SelectedDisplayMode = modes.FirstOrDefault(mode =>
+                    mode.Resolution == ProfileSetting.Resolution && mode.Frequency == ProfileSetting.Frequency)
+                ?? modes.FirstOrDefault();
+            NotifyOfPropertyChange(nameof(SelectedDisplayMode));
+            AppendStartupLog("BuildAvailableDisplayModes: selected display mode set");
+        }
+        catch (Exception ex)
+        {
+            AppendStartupLog($"BuildAvailableDisplayModes exception: {ex}");
+            AvailableDisplayModes = new List<DisplayPossibleSetting>();
+        }
     }
 
     private void UpdateHotkey()
@@ -215,7 +342,8 @@ public class ProfileSettingViewModel : Screen, IHandle<RevertEvent>
     private void SetOriginalSettings(ProfileSetting profileSetting)
     {
         _originalSettings = new ProfileSetting(profileSetting.Brightness, profileSetting.Contrast,
-            profileSetting.Gamma, profileSetting.DigitalVibrance);
+            profileSetting.Gamma, profileSetting.DigitalVibrance, profileSetting.Resolution,
+            profileSetting.Frequency);
     }
 
     private void Publish(bool value = true)
@@ -227,6 +355,17 @@ public class ProfileSettingViewModel : Screen, IHandle<RevertEvent>
     public void IsUpdated()
     {
         SetOriginalSettings(ProfileSetting);
+    }
+
+    private void AppendStartupLog(string message)
+    {
+        try
+        {
+            var baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? Environment.CurrentDirectory;
+            var logPath = Path.Combine(baseDir, "startup.log");
+            File.AppendAllText(logPath, $"{DateTime.UtcNow:o} - {message}{Environment.NewLine}");
+        }
+        catch { }
     }
 }
 
