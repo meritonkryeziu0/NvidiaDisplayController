@@ -30,10 +30,11 @@ public class ComputerFactory
         {
             var resolution = display.DisplayScreen.CurrentSetting.Resolution;
             var frequency = display.DisplayScreen.CurrentSetting.Frequency;
-            var displaySource = _pathDisplayTargets.Single(pds => pds.DevicePath == display.DevicePath);
+            var displaySource = ResolveDisplayTarget(display);
+            var displayName = displaySource?.FriendlyName ?? display.DisplayName;
 
             var monitor = _monitorFactory
-                .CreateDefault(display.DevicePath, displaySource.FriendlyName, resolution, frequency);
+                .CreateDefault(display.DevicePath, displayName, resolution, frequency);
 
             monitors.Add(monitor);
         }
@@ -41,5 +42,29 @@ public class ComputerFactory
         computer.Monitors.AddRange(monitors);
 
         return computer;
+    }
+
+    private PathDisplayTarget? ResolveDisplayTarget(Display display)
+    {
+        var exactMatch = _pathDisplayTargets.FirstOrDefault(target =>
+            DisplayPathHelper.PathsMatch(target.DevicePath, display.DevicePath));
+
+        if (exactMatch is not null)
+        {
+            return exactMatch;
+        }
+
+        var fallbackMatch = _pathDisplayTargets.FirstOrDefault(target =>
+            !string.IsNullOrWhiteSpace(target.FriendlyName) &&
+            !string.IsNullOrWhiteSpace(display.DisplayName) &&
+            target.FriendlyName.Contains(display.DisplayName, System.StringComparison.OrdinalIgnoreCase));
+
+        if (fallbackMatch is not null)
+        {
+            return fallbackMatch;
+        }
+
+        return _pathDisplayTargets.FirstOrDefault(target =>
+            DisplayPathHelper.PathsMatch(target.DevicePath, display.ScreenName));
     }
 }

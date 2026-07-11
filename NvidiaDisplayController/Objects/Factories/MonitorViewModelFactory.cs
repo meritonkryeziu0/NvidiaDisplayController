@@ -40,7 +40,7 @@ public class MonitorViewModelFactory
 
     public Result<MonitorViewModel> Create(Monitor monitor)
     {
-        var display = _displays.SingleOrDefault(d => d.DevicePath == monitor.DisplayDevicePath);
+        var display = _displays.FirstOrDefault(d => DisplayPathHelper.PathsMatch(d.DevicePath, monitor.DisplayDevicePath));
         if (display is null)
             return Result.Fail("Can't find display.");
 
