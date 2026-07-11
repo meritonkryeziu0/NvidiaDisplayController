@@ -10,7 +10,6 @@ using System.Windows;
 using System.Windows.Interop;
 using Caliburn.Micro;
 using NLog;
-using NvAPIWrapper.Display;
 using NvAPIWrapper.GPU;
 using NvidiaDisplayController.Global;
 using NvidiaDisplayController.Global.Controllers;
@@ -23,6 +22,8 @@ using NvidiaDisplayController.Objects.Factories.Interfaces;
 using NvidiaDisplayController.Objects.HandleEvents;
 using System.Windows.Input;
 using NHotkey.Wpf;
+using NvApiDisplay = NvAPIWrapper.Display.Display;
+using WindowsDisplayApiDisplay = WindowsDisplayAPI.Display;
 using Monitor = NvidiaDisplayController.Objects.Entities.Monitor;
 
 namespace NvidiaDisplayController.Interface.Shell;
@@ -42,10 +43,10 @@ public class ShellViewModel : Conductor<IScreen>, IHandle<ProfileSettingsEvent>
     private readonly RegistryController _registryController;
     private Computer _computer = null!;
     private ObservableCollection<MonitorViewModel> _monitors = null!;
-    private List<Display>? _nvidiaDisplays;
+    private List<NvApiDisplay>? _nvidiaDisplays;
     private bool _profileSettingsIsDirty;
     private MonitorViewModel? _selectedMonitor;
-    private Display? _selectedNvidiaMonitor;
+    private NvApiDisplay? _selectedNvidiaMonitor;
     private ProfileViewModel? _selectedProfile;
     private HotkeyManager? _hotkeyManager;
     private readonly Dictionary<int, ProfileViewModel> _hotkeyToProfile = new();
@@ -165,7 +166,7 @@ public class ShellViewModel : Conductor<IScreen>, IHandle<ProfileSettingsEvent>
         }
     }
 
-    public Display? SelectedNvidiaMonitor
+    public NvApiDisplay? SelectedNvidiaMonitor
     {
         get => _selectedNvidiaMonitor;
         set
@@ -240,7 +241,7 @@ public class ShellViewModel : Conductor<IScreen>, IHandle<ProfileSettingsEvent>
     {
         try
         {
-            _nvidiaDisplays = Display.GetDisplays().ToList();
+            _nvidiaDisplays = NvApiDisplay.GetDisplays().ToList();
         }
         catch (Exception e)
         {
@@ -256,14 +257,14 @@ public class ShellViewModel : Conductor<IScreen>, IHandle<ProfileSettingsEvent>
     {
         try
         {
-            var liveDisplays = Display.GetDisplays().ToList();
+            var liveDisplays = WindowsDisplayApiDisplay.GetDisplays().ToList();
             foreach (var display in liveDisplays)
             {
                 var resolution = display.DisplayScreen.CurrentSetting.Resolution;
                 var frequency = display.DisplayScreen.CurrentSetting.Frequency;
                 var displayName = display.DisplayName ?? display.DeviceName;
                 var monitor = new Monitor(display.DevicePath, displayName, resolution, frequency);
-                monitor.Profiles.Add(new Profile(monitor, "Default") { IsActive = true });
+                monitor.Profiles.Add(new Profile(monitor, "Default", new ProfileSetting(), true, true));
                 Computer?.Monitors.Add(monitor);
                 BuildMonitorViewModel(monitor);
             }
