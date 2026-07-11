@@ -31,7 +31,12 @@ public class ComputerFactory
             var resolution = display.DisplayScreen.CurrentSetting.Resolution;
             var frequency = display.DisplayScreen.CurrentSetting.Frequency;
             var displaySource = ResolveDisplayTarget(display);
-            var displayName = displaySource?.FriendlyName ?? display.DisplayName;
+            var displayName = displaySource?.FriendlyName ?? display.DisplayName ?? display.DeviceName;
+
+            if (string.IsNullOrWhiteSpace(displayName))
+            {
+                displayName = display.DeviceName;
+            }
 
             var monitor = _monitorFactory
                 .CreateDefault(display.DevicePath, displayName, resolution, frequency);

@@ -213,6 +213,11 @@ public class ShellViewModel : Conductor<IScreen>, IHandle<ProfileSettingsEvent>
             {
                 Computer = computer;
                 Computer.Monitors.ForEach(BuildMonitorViewModel);
+                if (Computer.Monitors.Count == 0)
+                {
+                    _logger.Warn("No monitors were loaded from persisted data; attempting to rebuild from live display enumeration.");
+                    LoadLiveMonitors();
+                }
             })
             .Do(_ => LoadNvidiaDisplays())
             .Do(_ => ApplySettingsOnStart());
@@ -244,6 +249,28 @@ public class ShellViewModel : Conductor<IScreen>, IHandle<ProfileSettingsEvent>
                 .ShowMessageBox("Failed to load displays connected to GPU. " +
                                 "Make sure screen is not being duplicated and or is connected to GPU. " +
                                 "Some features may not function properly.");
+        }
+    }
+
+    private void LoadLiveMonitors()
+    {
+        try
+        {
+            var liveDisplays = Display.GetDisplays().ToList();
+            foreach (var display in liveDisplays)
+            {
+                var resolution = display.DisplayScreen.CurrentSetting.Resolution;
+                var frequency = display.DisplayScreen.CurrentSetting.Frequency;
+                var displayName = display.DisplayName ?? display.DeviceName;
+                var monitor = new Monitor(display.DevicePath, displayName, resolution, frequency);
+                monitor.Profiles.Add(new Profile(monitor, "Default") { IsActive = true });
+                Computer?.Monitors.Add(monitor);
+                BuildMonitorViewModel(monitor);
+            }
+        }
+        catch (Exception e)
+        {
+            _logger.Error(e);
         }
     }
 

@@ -128,13 +128,15 @@ public class Display : DisplayDevice
     }
 
     /// <summary>
-    ///     Returns a list of all attached displays on this machine
+    ///     Returns a list of display devices discovered on this machine.
+    ///     This intentionally includes devices that are visible to the adapter even when the underlying
+    ///     Windows API doesn't mark them as attached to the desktop, which can happen for some DisplayPort paths.
     /// </summary>
     /// <returns>An enumerable list of Displays</returns>
     public static IEnumerable<Display> GetDisplays()
     {
         return DisplayAdapter.GetDisplayAdapters()
-            .SelectMany(adapter => adapter.GetDisplayDevices(true))
+            .SelectMany(adapter => adapter.GetDisplayDevices(null))
             .Select(device => new Display(device));
     }
 
